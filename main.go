@@ -44,49 +44,38 @@ func initUNO(messageString []string, tags map[string]string, channel string) {
 	channelClean := strings.ReplaceAll(channel, "#", "")
 	if messageString[0] == "!startuno" && tags["display-name"] == channelClean{
 
-		d1 := []byte("true")
+		d1 := []byte("waiting")
 		err := ioutil.WriteFile("unoStarted.txt", d1, 0644)
 		check(err)
 
 	}
 }
 
-func enterUNO(messageString []string, tags map[string]string, players []Player, unoStarted string) Player{
-	if messageString[0] == "!enter" && unoStarted == "true"{
-		var player Player
-		player.Name = tags["display-name"]
-
-		return player
-	}
-	var player Player
-	player.Name = ""
-
-	return player
-}
-
-func endUno(messageString []string, tags map[string]string, channel string, players []Player, unoStarted string){
+func endUno(messageString []string, tags map[string]string, channel string, players []Player, unoStarted string) []Player {
 	channelClean := strings.ReplaceAll(channel, "#", "")
 	fmt.Println( messageString[0] == "!enduno" && tags["display-name"] == channelClean)
 	if messageString[0] == "!enduno" && tags["display-name"] == channelClean{
 
-		d1 := []byte("false")
+		d1 := []byte("started")
 		err := ioutil.WriteFile("unoStarted.txt", d1, 0644)
 		check(err)
 
 		for i := 0;  i < len(players); i++{
-			player := players[i]
 
-			if player.Name != ""{
-				for i := 0; i < 7; i++{
-					pick := generateCard()
-					player.cards = append(player.cards, pick)
-				}
+			for j := 0; j <= 7; j++{
+				pick := generateCard()
+				players[i].cards = append(players[i].cards, pick)
 			}
+			
+			fmt.Println(players)
 		}
 
 		fmt.Println("players (endUno): ", players)
 
+		return players
+
 	}
+	return players
 }
 
 func checkUnoStarted() string{
@@ -126,7 +115,7 @@ func main() {
 
 	// Whenever someone sends a message, log it
 	client.OnChat(func(channel string, tags map[string]string, msg string) {
-
+		
 		fmt.Println(msg)
 
 		messageString := strings.Split(msg, " ")
@@ -134,9 +123,18 @@ func main() {
 		unoStarted := checkUnoStarted()
 
 		initUNO(messageString, tags, channel)
-		players = append(players, enterUNO(messageString, tags, players, unoStarted))
+
+	if messageString[0] == "!enter" && unoStarted == "true"{
+		var player Player
+		player.Name = tags["display-name"]
+
+		
+		players = append(players, player)
+	}
+
 		fmt.Println("Players (main): ", players)
-		endUno(messageString, tags, channel, players, unoStarted)
+
+		players = endUno(messageString, tags, channel, players, unoStarted)
 
 	})
 
