@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 	"strings"
 	"io/ioutil"
 	"math/rand"
@@ -11,15 +12,21 @@ import (
 	"github.com/jrm780/gotirc"
 )
 
+func remove(s []string, i int) []string {
+    s[i] = s[len(s)-1]
+    return s[:len(s)-1]
+}
 
 type Player struct {
-	Name string
+	name string
 	cards []string
 }
 
 func generateCard() string {
+
 	cards := [53]string{"red 1","red 2","red 3","red 4","red 5","red 6","red 7","red 8","red 9","blue 1","blue 2","blue 3","blue 4","blue 5","blue 6","blue 7","blue 8","blue 9", "green 1","green 2","green 3","green 4","green 5","green 6","green 7","green 8","green 9", "yellow 1","yellow 2","yellow 3","yellow 4","yellow 5","yellow 6","yellow 7","yellow 8","yellow 9", "wild 4", "red reverse", "yellow reverse", "blue reverse", "green reverse", "red +2", "green +2", "yellow +2", "blue +2"}
 
+	rand.Seed(time.Now().UnixNano())
 	randomIndex := rand.Intn(len(cards))
 	pick := cards[randomIndex]
 
@@ -51,9 +58,8 @@ func initUNO(messageString []string, tags map[string]string, channel string) {
 	}
 }
 
-func endUno(messageString []string, tags map[string]string, channel string, players []Player, unoStarted string) []Player {
+func endUno(messageString []string, tags map[string]string, channel string, players []Player, unoStarted string, client *gotirc.Client) []Player {
 	channelClean := strings.ReplaceAll(channel, "#", "")
-	fmt.Println( messageString[0] == "!enduno" && tags["display-name"] == channelClean)
 	if messageString[0] == "!enduno" && tags["display-name"] == channelClean{
 
 		d1 := []byte("started")
@@ -62,15 +68,14 @@ func endUno(messageString []string, tags map[string]string, channel string, play
 
 		for i := 0;  i < len(players); i++{
 
-			for j := 0; j <= 7; j++{
+			for j := 0; j < 7; j++{
 				pick := generateCard()
 				players[i].cards = append(players[i].cards, pick)
 			}
 			
-			fmt.Println(players)
+			cards := strings.Join(players[i].cards, ", ")
+			client.Whisper(players[i].name, players[i].name + " suas cartas são: " + cards)
 		}
-
-		fmt.Println("players (endUno): ", players)
 
 		return players
 
@@ -114,27 +119,55 @@ func main() {
 	client := gotirc.NewClient(options)
 
 	// Whenever someone sends a message, log it
+	var stack []string
+	currentPlayer := 0
 	client.OnChat(func(channel string, tags map[string]string, msg string) {
-		
+
 		fmt.Println(msg)
 
 		messageString := strings.Split(msg, " ")
 
-		unoStarted := checkUnoStarted()
+		unoState := checkUnoStarted()
 
 		initUNO(messageString, tags, channel)
 
-	if messageString[0] == "!enter" && unoStarted == "true"{
-		var player Player
-		player.Name = tags["display-name"]
+		fmt.Println(unoState)
+		if messageString[0] == "!enter" && unoState == "waiting"{
+			var player Player
+			player.name = tags["display-name"]
 
-		
-		players = append(players, player)
-	}
+			players = append(players, player)
+		}
 
 		fmt.Println("Players (main): ", players)
 
-		players = endUno(messageString, tags, channel, players, unoStarted)
+		if messageString[0] == "!play" && len(messageString) == 3 && unoState == "started"{
+			player := players[currentPlayer]
+			fmt.Println(player)
+			if player.name ==  tags["display-name"]{
+				card := strings.ReplaceAll(messageString[1], " ", "") + " " + strings.ReplaceAll(messageString[2], " ", "")
+				fmt.Println(card)
+				fmt.Println(currentPlayer)
+
+				for i := 0; i < len(player.cards); i++{
+					if (card == player.cards[i]){
+						stack = append(stack, card)
+						players[currentPlayer].cards = remove(player.cards, i)
+
+						cards := strings.Join(player.cards, ", ")
+						client.Whisper(player.name, player.name + " suas cartas agora são: " + cards)
+
+						if currentPlayer == len(players) - 1{
+							currentPlayer = 0
+						}else{
+							currentPlayer++
+						}
+						fmt.Println(stack)
+					}
+				}
+			}
+	}
+		players = endUno(messageString, tags, channel, players, unoState, client)
 
 	})
 
